@@ -1,18 +1,268 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Go</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go → Passageiro</title>
 
-  <!-- Aqui 👇 -->
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-  <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
-  <meta name="theme-color" content="#5A33FF">
+<!-- ÍCONES NOVOS - CORES CANVA -->
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-512.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#5A33FF">
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; background: white; color: #222; }
+header {
+  background: linear-gradient(135deg, #00C4CC 0%, #5A33FF 100%);
+  color: white; padding: 18px; text-align: center; font-size: 28px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+header img { width: 32px; height: 32px; border-radius: 7px; }
+.container { width: 100%; max-width: 600px; margin: auto; padding: 18px; }
+h2 { color: #5A33FF; margin-top: 5px; margin-bottom: 18px; }
+label { display: block; margin-top: 14px; margin-bottom: 5px; font-weight: bold; }
+input { width: 100%; padding: 13px; border: 1px solid #bbb; border-radius: 7px; font-size: 16px; }
+button {
+  width: 100%; padding: 14px; margin-top: 18px; border: none; border-radius: 7px;
+  background: linear-gradient(135deg, #00C4CC 0%, #5A33FF 100%);
+  color: white; font-size: 17px; font-weight: bold; cursor: pointer;
+}
+button:hover { opacity: 0.9; }
+.secondary { background: white!important; color: #5A33FF; border: 2px solid #5A33FF; }
+.hidden { display: none; }
+.mensagem { margin-top: 15px; padding: 12px; border-radius: 7px; background: #f1f1f1; }
+.campo-com-botao { display: flex; gap: 8px; }
+.campo-com-botao input { flex: 1; }
+.btn-editar { width: 52px; margin-top: 0; padding: 0; font-size: 22px; }
+.sugestoes { margin-top: 8px; }
+.sugestao { border: 1px solid #ccc; border-radius: 7px; padding: 12px; margin-bottom: 8px; cursor: pointer; background: white; }
+.sugestao:hover { background: #f1f5fa; }
+.sugestao strong { display: block; color: #5A33FF; margin-bottom: 5px; }
+.info-rota { margin-top: 15px; padding: 15px; border-radius: 8px; background: #f1f5fa; border: 1px solid #d5dce5; }
+.info-rota div { margin: 7px 0; }
+#mapa { width: 100%; height: calc(100vh - 370px); min-height: 280px; max-height: 650px; margin-top: 15px; border-radius: 8px; overflow: hidden; }
+@media (max-width: 600px) {
+ .container { padding: 14px; }
+  header { padding: 14px; font-size: 25px; }
+  #mapa { height: calc(100vh - 330px); min-height: 260px; }
+}
+</style>
 </head>
 <body>
-  ...
+
+<header>
+  <img src="icon-192.png" alt="Go">
+  Go →
+</header>
+
+<div class="container">
+<section id="telaCadastro">
+  <h2>Cadastro do passageiro</h2>
+  <label for="nome">Nome</label>
+  <input id="nome" type="text" placeholder="Digite seu nome">
+  <label for="endereco">Endereço</label>
+  <input id="endereco" type="text" placeholder="Digite seu endereço">
+  <label for="email">E-mail</label>
+  <input id="email" type="email" placeholder="Digite seu e-mail">
+  <label for="telefone">Telefone</label>
+  <input id="telefone" type="tel" placeholder="Digite seu telefone">
+  <button id="btnSalvarCadastro" type="button">Salvar cadastro</button>
+  <div id="mensagemCadastro" class="mensagem"></div>
+</section>
+
+<section id="telaLogin" class="hidden">
+  <h2>Login</h2>
+  <label for="loginUsuario">Usuário</label>
+  <input id="loginUsuario" type="text" placeholder="Digite seu usuário">
+  <label for="loginSenha">Senha</label>
+  <input id="loginSenha" type="password" placeholder="Digite sua senha">
+  <button id="btnLogin" type="button">Login</button>
+  <button id="btnCadastroLogin" type="button" class="secondary">Cadastrar usuário e senha</button>
+  <div id="mensagemLogin" class="mensagem"></div>
+</section>
+
+<section id="telaCadastroLogin" class="hidden">
+  <h2>Cadastrar usuário e senha</h2>
+  <label for="novoUsuario">Usuário</label>
+  <input id="novoUsuario" type="text" placeholder="Escolha um usuário">
+  <label for="novaSenha">Senha</label>
+  <input id="novaSenha" type="password" placeholder="Crie uma senha">
+  <button id="btnSalvarLogin" type="button">Salvar usuário e senha</button>
+  <button id="btnVoltarLogin" type="button" class="secondary">Voltar para login</button>
+  <div id="mensagemCadastroLogin" class="mensagem"></div>
+</section>
+
+<section id="telaCorrida" class="hidden">
+  <h2>Solicitar corrida</h2>
+  <label for="embarque">Embarque</label>
+  <div class="campo-com-botao">
+    <input id="embarque" type="text" placeholder="Obtendo localização..." readonly>
+    <button id="btnEditarEmbarque" type="button" class="btn-editar">✎</button>
+  </div>
+  <label for="desembarque">Desembarque</label>
+  <div class="campo-com-botao">
+    <input id="desembarque" type="text" placeholder="Digite o endereço de destino" autocomplete="off">
+    <button id="btnEditarDesembarque" type="button" class="btn-editar">✎</button>
+  </div>
+  <div id="sugestoesEndereco" class="sugestoes"></div>
+  <button id="btnCalcularRota" type="button">Calcular rota</button>
+  <div id="resultadoRota"></div>
+  <div id="mapa"></div>
+</section>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+const CHAVE_CADASTRO = "go_cadastro_passageiro";
+const CHAVE_LOGIN = "go_login_passageiro";
+let destinoLat = null, destinoLng = null, origemLat = null, origemLng = null;
+let mapa = null, marcadorOrigem = null, marcadorDestino = null, linhaRota = null, timerBusca = null;
+const telaCadastro = document.getElementById("telaCadastro");
+const telaLogin = document.getElementById("telaLogin");
+const telaCadastroLogin = document.getElementById("telaCadastroLogin");
+const telaCorrida = document.getElementById("telaCorrida");
+function mostrarTela(tela) {
+  telaCadastro.classList.add("hidden"); telaLogin.classList.add("hidden");
+  telaCadastroLogin.classList.add("hidden"); telaCorrida.classList.add("hidden");
+  tela.classList.remove("hidden");
+}
+function verificarCadastro() {
+  const cadastro = localStorage.getItem(CHAVE_CADASTRO);
+  if (cadastro) mostrarTela(telaLogin); else mostrarTela(telaCadastro);
+}
+document.getElementById("btnSalvarCadastro").addEventListener("click", function () {
+  const nome = document.getElementById("nome").value.trim();
+  const endereco = document.getElementById("endereco").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const telefone = document.getElementById("telefone").value.trim();
+  const mensagem = document.getElementById("mensagemCadastro");
+  if (!nome ||!endereco ||!email ||!telefone) { mensagem.textContent = "Preencha todos os campos."; return; }
+  localStorage.setItem(CHAVE_CADASTRO, JSON.stringify({ nome, endereco, email, telefone }));
+  document.getElementById("nome").value = ""; document.getElementById("endereco").value = "";
+  document.getElementById("email").value = ""; document.getElementById("telefone").value = "";
+  mensagem.textContent = "Cadastro salvo com sucesso.";
+  setTimeout(() => mostrarTela(telaLogin), 800);
+});
+document.getElementById("btnCadastroLogin").addEventListener("click", () => mostrarTela(telaCadastroLogin));
+document.getElementById("btnVoltarLogin").addEventListener("click", () => mostrarTela(telaLogin));
+document.getElementById("btnSalvarLogin").addEventListener("click", function () {
+  const usuario = document.getElementById("novoUsuario").value.trim();
+  const senha = document.getElementById("novaSenha").value;
+  const mensagem = document.getElementById("mensagemCadastroLogin");
+  if (!usuario ||!senha) { mensagem.textContent = "Digite o usuário e a senha."; return; }
+  localStorage.setItem(CHAVE_LOGIN, JSON.stringify({ usuario, senha }));
+  document.getElementById("novoUsuario").value = ""; document.getElementById("novaSenha").value = "";
+  mensagem.textContent = "Usuário e senha salvos.";
+  setTimeout(() => mostrarTela(telaLogin), 800);
+});
+document.getElementById("btnLogin").addEventListener("click", function () {
+  const usuario = document.getElementById("loginUsuario").value.trim();
+  const senha = document.getElementById("loginSenha").value;
+  const mensagem = document.getElementById("mensagemLogin");
+  const loginSalvo = localStorage.getItem(CHAVE_LOGIN);
+  if (!loginSalvo) { mensagem.textContent = "Cadastre primeiro um usuário e uma senha."; return; }
+  let login; try { login = JSON.parse(loginSalvo); } catch { mensagem.textContent = "Dados de login inválidos."; return; }
+  if (usuario === login.usuario && senha === login.senha) {
+    mensagem.textContent = ""; document.getElementById("loginUsuario").value = ""; document.getElementById("loginSenha").value = "";
+    mostrarTela(telaCorrida); iniciarGPS();
+  } else { mensagem.textContent = "Usuário ou senha incorretos."; }
+});
+function iniciarGPS() {
+  const campo = document.getElementById("embarque");
+  campo.value = "Obtendo localização...";
+  if (!navigator.geolocation) { campo.value = "GPS não disponível neste aparelho."; return; }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    origemLat = pos.coords.latitude; origemLng = pos.coords.longitude;
+    buscarEnderecoGPS(origemLat, origemLng);
+  }, () => { campo.value = "Não foi possível obter sua localização."; }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+}
+async function buscarEnderecoGPS(lat, lng) {
+  const campo = document.getElementById("embarque");
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=pt-BR`;
+    const r = await fetch(url); const d = await r.json();
+    campo.value = d.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  } catch { campo.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`; }
+}
+document.getElementById("btnEditarEmbarque").addEventListener("click", function () {
+  const c = document.getElementById("embarque"); c.readOnly =!c.readOnly; if (!c.readOnly) c.focus();
+});
+document.getElementById("btnEditarDesembarque").addEventListener("click", () => document.getElementById("desembarque").focus());
+document.getElementById("desembarque").addEventListener("input", function () {
+  const texto = this.value.trim(); destinoLat = null; destinoLng = null; clearTimeout(timerBusca);
+  if (texto.length < 3) { document.getElementById("sugestoesEndereco").innerHTML = ""; return; }
+  timerBusca = setTimeout(() => pesquisarEndereco(texto), 600);
+});
+async function pesquisarEndereco(texto) {
+  const caixa = document.getElementById("sugestoesEndereco"); caixa.textContent = "Pesquisando endereços...";
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&countrycodes=br&limit=10&addressdetails=1&dedupe=0&accept-language=pt-BR`;
+    const r = await fetch(url); const resultados = await r.json(); caixa.innerHTML = "";
+    if (!resultados.length) { caixa.textContent = "Nenhum endereço encontrado."; return; }
+    resultados.forEach(item => {
+      const e = item.address || {};
+      const rua = e.road || e.pedestrian || e.footway || item.display_name;
+      const numero = e.house_number? `, nº ${e.house_number}` : "";
+      const bairro = e.suburb || e.neighbourhood || e.quarter || "";
+      const cidade = e.city || e.town || e.municipality || "";
+      const estado = e.state || "";
+      const div = document.createElement("div"); div.className = "sugestao";
+      const titulo = document.createElement("strong"); titulo.textContent = rua + numero; div.appendChild(titulo);
+      const detalhes = document.createElement("span");
+      detalhes.textContent = bairro + (bairro && cidade? " - " : "") + cidade + (cidade && estado? " - " : "") + estado;
+      div.appendChild(detalhes);
+      div.addEventListener("click", () => {
+        destinoLat = parseFloat(item.lat); destinoLng = parseFloat(item.lon);
+        document.getElementById("desembarque").value = item.display_name; caixa.innerHTML = "";
+      });
+      caixa.appendChild(div);
+    });
+  } catch { caixa.textContent = "Não foi possível pesquisar o endereço."; }
+}
+document.getElementById("btnCalcularRota").addEventListener("click", calcularRota);
+async function calcularRota() {
+  const resultado = document.getElementById("resultadoRota");
+  if (origemLat === null || origemLng === null) {
+    resultado.innerHTML = '<div class="info-rota">Não foi possível obter o local de embarque.</div>'; iniciarGPS(); return;
+  }
+  if (destinoLat === null || destinoLng === null) {
+    resultado.innerHTML = '<div class="info-rota">Selecione um endereço de desembarque na lista.</div>'; return;
+  }
+  resultado.innerHTML = '<div class="info-rota">Calculando rota...</div>';
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${origemLng},${origemLat};${destinoLng},${destinoLat}?overview=full&geometries=geojson`;
+    const r = await fetch(url); const dados = await r.json();
+    const rota = dados.routes[0];
+    const distanciaKm = rota.distance / 1000; const tempoMin = Math.ceil(rota.duration / 60);
+    const valorCalculado = Math.max(7, distanciaKm * 2 + tempoMin);
+    resultado.innerHTML = `<div class="info-rota"><div><strong>Distância:</strong> ${distanciaKm.toFixed(2)} km</div><div><strong>Tempo estimado:</strong> ${tempoMin} min</div><div><strong>Valor da corrida:</strong> R$ ${valorCalculado.toFixed(2).replace(".", ",")}</div></div>`;
+    mostrarRotaNoMapa(rota.geometry);
+  } catch { resultado.innerHTML = '<div class="info-rota">Não foi possível calcular a rota.</div>'; }
+}
+function inicializarMapa() {
+  if (mapa) return; mapa = L.map("mapa");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors" }).addTo(mapa);
+  mapa.setView([-23.5505, -46.6333], 13);
+}
+function mostrarRotaNoMapa(geometria) {
+  inicializarMapa();
+  if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
+  if (marcadorDestino) mapa.removeLayer(marcadorDestino);
+  if (linhaRota) mapa.removeLayer(linhaRota);
+  marcadorOrigem = L.marker([origemLat, origemLng]).addTo(mapa).bindPopup("Embarque");
+  marcadorDestino = L.marker([destinoLat, destinoLng]).addTo(mapa).bindPopup("Desembarque");
+  linhaRota = L.geoJSON(geometria).addTo(mapa);
+  const grupo = L.featureGroup([marcadorOrigem, marcadorDestino, linhaRota]);
+  mapa.fitBounds(grupo.getBounds(), { padding: [30, 30] });
+  setTimeout(() => mapa.invalidateSize(), 300);
+}
+verificarCadastro();
+</script>
 </body>
 </html>
