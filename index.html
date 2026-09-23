@@ -1,27 +1,1596 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Go →</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#222}header{background:#062b63;color:#fff;padding:18px;text-align:center;font-size:28px;font-weight:bold}.container{max-width:600px;margin:auto;padding:18px}h2{color:#062b63}label{display:block;margin:14px 0 5px;font-weight:bold}input{width:100%;padding:13px;border:1px solid #bbb;border-radius:7px;font-size:16px}button{width:100%;padding:14px;margin-top:18px;border:0;border-radius:7px;background:#062b63;color:#fff;font-size:17px;font-weight:bold}.secondary{background:#fff;color:#062b63;border:2px solid #062b63}.hidden{display:none}.sugestao{border:1px solid #ccc;border-radius:7px;padding:12px;margin:8px 0;cursor:pointer}.sugestao strong{display:block;color:#062b63;margin-bottom:5px}.campo{display:flex;gap:8px}.campo input{flex:1}.editar{width:52px;margin-top:0}.info{margin-top:15px;padding:15px;border-radius:8px;background:#f1f5fa;border:1px solid #d5dce5}.info div{margin:7px 0}#mapa{width:100%;height:calc(100vh - 370px);min-height:280px;margin-top:15px;border-radius:8px}@media(max-width:600px){.container{padding:14px}#mapa{height:calc(100vh - 330px);min-height:260px}}</style>
-</head><body><header>Go →</header><div class="container">
-<section id="cadastro"><h2>Cadastro do passageiro</h2><label>Nome</label><input id="nome"><label>Endereço</label><input id="endereco"><label>E-mail</label><input id="email" type="email"><label>Telefone</label><input id="telefone"><button onclick="salvarCadastro()">Salvar cadastro</button><div id="msgCadastro"></div></section>
-<section id="login" class="hidden"><h2>Login</h2><label>Usuário</label><input id="usuario"><label>Senha</label><input id="senha" type="password"><button onclick="login()">Login</button><button class="secondary" onclick="tela('cadastroLogin')">Cadastrar usuário e senha</button><div id="msgLogin"></div></section>
-<section id="cadastroLogin" class="hidden"><h2>Cadastrar usuário e senha</h2><label>Usuário</label><input id="novoUsuario"><label>Senha</label><input id="novaSenha" type="password"><button onclick="salvarLogin()">Salvar usuário e senha</button><button class="secondary" onclick="tela('login')">Voltar para login</button><div id="msgCadastroLogin"></div></section>
-<section id="corrida" class="hidden"><h2>Solicitar corrida</h2><label>Embarque</label><div class="campo"><input id="embarque" placeholder="Obtendo localização..." readonly><button class="editar" onclick="editarEmbarque()">✎</button></div><label>Desembarque</label><div class="campo"><input id="desembarque" placeholder="Digite o endereço de destino" autocomplete="off"><button class="editar" onclick="document.getElementById('desembarque').focus()">✎</button></div><div id="sugestoes"></div><button onclick="calcularRota()">Calcular rota</button><div id="resultado"></div><div id="mapa"></div></section></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
-const C='go_cadastro_passageiro',L='go_login_passageiro';let olat=null,olon=null,dlat=null,dlon=null,map=null,line=null,mo=null,md=null,timer;
-function tela(id){['cadastro','login','cadastroLogin','corrida'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id))}
-function salvarCadastro(){let v=['nome','endereco','email','telefone'].map(x=>document.getElementById(x).value.trim());if(v.some(x=>!x)){msgCadastro.textContent='Preencha todos os campos.';return}localStorage.setItem(C,JSON.stringify({nome:v[0],endereco:v[1],email:v[2],telefone:v[3]}));['nome','endereco','email','telefone'].forEach(x=>document.getElementById(x).value='');msgCadastro.textContent='Cadastro salvo com sucesso.';setTimeout(()=>tela('login'),700)}
-function salvarLogin(){let u=novoUsuario.value.trim(),s=novaSenha.value;if(!u||!s){msgCadastroLogin.textContent='Digite o usuário e a senha.';return}localStorage.setItem(L,JSON.stringify({usuario:u,senha:s}));novoUsuario.value='';novaSenha.value='';msgCadastroLogin.textContent='Usuário e senha salvos.';setTimeout(()=>tela('login'),700)}
-function login(){let x=localStorage.getItem(L);if(!x){msgLogin.textContent='Cadastre primeiro um usuário e uma senha.';return}let a=JSON.parse(x);if(usuario.value.trim()===a.usuario&&senha.value===a.senha){tela('corrida');iniciarGPS()}else msgLogin.textContent='Usuário ou senha incorretos.'}
-function iniciarGPS(){embarque.value='Obtendo localização...';if(!navigator.geolocation){embarque.value='GPS não disponível.';return}navigator.geolocation.getCurrentPosition(async p=>{olat=p.coords.latitude;olon=p.coords.longitude;try{let r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${olat}&lon=${olon}&zoom=18&addressdetails=1&accept-language=pt-BR`);let d=await r.json();embarque.value=d.display_name||`${olat}, ${olon}`}catch(e){embarque.value=`${olat.toFixed(6)}, ${olon.toFixed(6)}`}},()=>embarque.value='Não foi possível obter sua localização.',{enableHighAccuracy:true,timeout:15000,maximumAge:0})}
-function editarEmbarque(){embarque.readOnly=!embarque.readOnly;if(!embarque.readOnly)embarque.focus()}
-desembarque.addEventListener('input',()=>{clearTimeout(timer);dlat=dlon=null;let q=desembarque.value.trim();if(q.length<3){sugestoes.innerHTML='';return}timer=setTimeout(()=>buscar(q),600)})
-async function buscar(q){sugestoes.textContent='Pesquisando endereços...';try{let r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=br&limit=10&addressdetails=1&dedupe=0&accept-language=pt-BR`),a=await r.json();sugestoes.innerHTML='';if(!a.length){sugestoes.textContent='Nenhum endereço encontrado.';return}a.forEach(i=>{let d=i.address||{},rua=d.road||d.pedestrian||d.footway||i.display_name,b=d.suburb||d.neighbourhood||d.quarter||'',c=d.city||d.town||d.municipality||'',e=d.state||'',n=d.house_number?', nº '+d.house_number:'';let el=document.createElement('div');el.className='sugestao';el.innerHTML=`<strong>${esc(rua)}${esc(n)}</strong>${esc(b)}${b&&c?' - ':''}${esc(c)}${c&&e?' - ':''}${esc(e)}`;el.onclick=()=>{dlat=+i.lat;dlon=+i.lon;desembarque.value=i.display_name;sugestoes.innerHTML=''};sugestoes.appendChild(el)})}catch(e){sugestoes.textContent='Não foi possível pesquisar o endereço.'}}
-function esc(x){return String(x||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
-async function calcularRota(){if(olat===null){resultado.innerHTML='<div class="info">Obtendo localização de embarque...</div>';iniciarGPS();return}if(dlat===null){resultado.innerHTML='<div class="info">Selecione um endereço de desembarque na lista.</div>';return}resultado.innerHTML='<div class="info">Calculando rota...</div>';try{let r=await fetch(`https://router.project-osrm.org/route/v1/driving/${olon},${olat};${dlon},${dlat}?overview=full&geometries=geojson`),j=await r.json(),rt=j.routes[0],km=rt.distance/1000,min=Math.ceil(rt.duration/60),preco=Math.max(7,km*2+min);resultado.innerHTML=`<div class="info"><div><b>Distância:</b> ${km.toFixed(2)} km</div><div><b>Tempo estimado:</b> ${min} min</div><div><b>Valor da corrida:</b> R$ ${preco.toFixed(2).replace('.',',')}</div></div>`;mostrarMapa(rt.geometry)}catch(e){resultado.innerHTML='<div class="info">Não foi possível calcular a rota.</div>'}}
-function mostrarMapa(g){if(!map){map=L.map('mapa');L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map)}if(mo)map.removeLayer(mo);if(md)map.removeLayer(md);if(line)map.removeLayer(line);mo=L.marker([olat,olon]).addTo(map).bindPopup('Embarque');md=L.marker([dlat,dlon]).addTo(map).bindPopup('Desembarque');line=L.geoJSON(g).addTo(map);map.fitBounds(L.featureGroup([mo,md,line]).getBounds(),{padding:[30,30]});setTimeout(()=>map.invalidateSize(),300)}
-if(localStorage.getItem(C))tela('login');else tela('cadastro');
-</script></body></html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Go → Passageiro</title>
+
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: white;
+  color: #222;
+}
+
+header {
+  background: #062b63;
+  color: white;
+  padding: 18px;
+  text-align: center;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.container {
+  width: 100%;
+  max-width: 600px;
+  margin: auto;
+  padding: 18px;
+}
+
+h2 {
+  color: #062b63;
+  margin-top: 5px;
+  margin-bottom: 18px;
+}
+
+label {
+  display: block;
+  margin-top: 14px;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+input {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #bbb;
+  border-radius: 7px;
+  font-size: 16px;
+}
+
+button {
+  width: 100%;
+  padding: 14px;
+  margin-top: 18px;
+  border: none;
+  border-radius: 7px;
+  background: #062b63;
+  color: white;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0b3d87;
+}
+
+.secondary {
+  background: white;
+  color: #062b63;
+  border: 2px solid #062b63;
+}
+
+.hidden {
+  display: none;
+}
+
+.mensagem {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 7px;
+  background: #f1f1f1;
+}
+
+.campo-com-botao {
+  display: flex;
+  gap: 8px;
+}
+
+.campo-com-botao input {
+  flex: 1;
+}
+
+.btn-editar {
+  width: 52px;
+  margin-top: 0;
+  padding: 0;
+  font-size: 22px;
+}
+
+.sugestoes {
+  margin-top: 8px;
+}
+
+.sugestao {
+  border: 1px solid #ccc;
+  border-radius: 7px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: white;
+}
+
+.sugestao:hover {
+  background: #f1f5fa;
+}
+
+.sugestao strong {
+  display: block;
+  color: #062b63;
+  margin-bottom: 5px;
+}
+
+.info-rota {
+  margin-top: 15px;
+  padding: 15px;
+  border-radius: 8px;
+  background: #f1f5fa;
+  border: 1px solid #d5dce5;
+}
+
+.info-rota div {
+  margin: 7px 0;
+}
+
+#mapa {
+  width: 100%;
+  height: calc(100vh - 370px);
+  min-height: 280px;
+  max-height: 650px;
+  margin-top: 15px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+@media (max-width: 600px) {
+
+  .container {
+    padding: 14px;
+  }
+
+  header {
+    padding: 14px;
+    font-size: 25px;
+  }
+
+  #mapa {
+    height: calc(100vh - 330px);
+    min-height: 260px;
+  }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+  Go →
+</header>
+
+<div class="container">
+
+
+<!-- =====================================================
+     TELA 1 — CADASTRO DO PASSAGEIRO
+===================================================== -->
+
+<section id="telaCadastro">
+
+  <h2>Cadastro do passageiro</h2>
+
+  <label for="nome">
+    Nome
+  </label>
+
+  <input
+    id="nome"
+    type="text"
+    placeholder="Digite seu nome"
+  >
+
+
+  <label for="endereco">
+    Endereço
+  </label>
+
+  <input
+    id="endereco"
+    type="text"
+    placeholder="Digite seu endereço"
+  >
+
+
+  <label for="email">
+    E-mail
+  </label>
+
+  <input
+    id="email"
+    type="email"
+    placeholder="Digite seu e-mail"
+  >
+
+
+  <label for="telefone">
+    Telefone
+  </label>
+
+  <input
+    id="telefone"
+    type="tel"
+    placeholder="Digite seu telefone"
+  >
+
+
+  <button
+    id="btnSalvarCadastro"
+    type="button"
+  >
+    Salvar cadastro
+  </button>
+
+  <div
+    id="mensagemCadastro"
+    class="mensagem"
+  ></div>
+
+</section>
+
+
+
+<!-- =====================================================
+     TELA 2 — LOGIN
+===================================================== -->
+
+<section
+  id="telaLogin"
+  class="hidden"
+>
+
+  <h2>
+    Login
+  </h2>
+
+
+  <label for="loginUsuario">
+    Usuário
+  </label>
+
+  <input
+    id="loginUsuario"
+    type="text"
+    placeholder="Digite seu usuário"
+  >
+
+
+  <label for="loginSenha">
+    Senha
+  </label>
+
+  <input
+    id="loginSenha"
+    type="password"
+    placeholder="Digite sua senha"
+  >
+
+
+  <button
+    id="btnLogin"
+    type="button"
+  >
+    Login
+  </button>
+
+
+  <button
+    id="btnCadastroLogin"
+    type="button"
+    class="secondary"
+  >
+    Cadastrar usuário e senha
+  </button>
+
+
+  <div
+    id="mensagemLogin"
+    class="mensagem"
+  ></div>
+
+</section>
+
+
+
+<!-- =====================================================
+     TELA 3 — CADASTRO DE USUÁRIO E SENHA
+===================================================== -->
+
+<section
+  id="telaCadastroLogin"
+  class="hidden"
+>
+
+  <h2>
+    Cadastrar usuário e senha
+  </h2>
+
+
+  <label for="novoUsuario">
+    Usuário
+  </label>
+
+  <input
+    id="novoUsuario"
+    type="text"
+    placeholder="Escolha um usuário"
+  >
+
+
+  <label for="novaSenha">
+    Senha
+  </label>
+
+  <input
+    id="novaSenha"
+    type="password"
+    placeholder="Crie uma senha"
+  >
+
+
+  <button
+    id="btnSalvarLogin"
+    type="button"
+  >
+    Salvar usuário e senha
+  </button>
+
+
+  <button
+    id="btnVoltarLogin"
+    type="button"
+    class="secondary"
+  >
+    Voltar para login
+  </button>
+
+
+  <div
+    id="mensagemCadastroLogin"
+    class="mensagem"
+  ></div>
+
+</section>
+
+
+
+<!-- =====================================================
+     TELA 4 — SOLICITAÇÃO DE CORRIDA
+===================================================== -->
+
+<section
+  id="telaCorrida"
+  class="hidden"
+>
+
+  <h2>
+    Solicitar corrida
+  </h2>
+
+
+  <!-- EMBARQUE -->
+
+  <label for="embarque">
+    Embarque
+  </label>
+
+  <div class="campo-com-botao">
+
+    <input
+      id="embarque"
+      type="text"
+      placeholder="Obtendo localização..."
+      readonly
+    >
+
+    <button
+      id="btnEditarEmbarque"
+      type="button"
+      class="btn-editar"
+      title="Editar embarque"
+    >
+      ✎
+    </button>
+
+  </div>
+
+
+
+  <!-- DESEMBARQUE -->
+
+  <label for="desembarque">
+    Desembarque
+  </label>
+
+  <div class="campo-com-botao">
+
+    <input
+      id="desembarque"
+      type="text"
+      placeholder="Digite o endereço de destino"
+      autocomplete="off"
+    >
+
+    <button
+      id="btnEditarDesembarque"
+      type="button"
+      class="btn-editar"
+      title="Editar desembarque"
+    >
+      ✎
+    </button>
+
+  </div>
+
+
+  <!-- RESULTADOS DE ENDEREÇO -->
+
+  <div
+    id="sugestoesEndereco"
+    class="sugestoes"
+  ></div>
+
+
+  <!-- CALCULAR ROTA -->
+
+  <button
+    id="btnCalcularRota"
+    type="button"
+  >
+    Calcular rota
+  </button>
+
+
+  <!-- RESULTADO -->
+
+  <div id="resultadoRota"></div>
+
+
+  <!-- MAPA -->
+
+  <div id="mapa"></div>
+
+</section>
+
+</div>
+
+
+
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+></script>
+
+
+<script>
+
+"use strict";
+
+
+/* =====================================================
+   CONFIGURAÇÕES
+===================================================== */
+
+const CHAVE_CADASTRO =
+  "go_cadastro_passageiro";
+
+const CHAVE_LOGIN =
+  "go_login_passageiro";
+
+
+/* =====================================================
+   VARIÁVEIS
+===================================================== */
+
+let destinoLat = null;
+let destinoLng = null;
+
+let origemLat = null;
+let origemLng = null;
+
+let mapa = null;
+
+let marcadorOrigem = null;
+let marcadorDestino = null;
+let linhaRota = null;
+
+let timerBusca = null;
+
+
+/* =====================================================
+   TELAS
+===================================================== */
+
+const telaCadastro =
+  document.getElementById("telaCadastro");
+
+const telaLogin =
+  document.getElementById("telaLogin");
+
+const telaCadastroLogin =
+  document.getElementById("telaCadastroLogin");
+
+const telaCorrida =
+  document.getElementById("telaCorrida");
+
+
+/* =====================================================
+   MOSTRAR TELA
+===================================================== */
+
+function mostrarTela(tela) {
+
+  telaCadastro.classList.add("hidden");
+
+  telaLogin.classList.add("hidden");
+
+  telaCadastroLogin.classList.add("hidden");
+
+  telaCorrida.classList.add("hidden");
+
+  tela.classList.remove("hidden");
+
+}
+
+
+/* =====================================================
+   VERIFICAR CADASTRO
+===================================================== */
+
+function verificarCadastro() {
+
+  const cadastro =
+    localStorage.getItem(CHAVE_CADASTRO);
+
+  if (cadastro) {
+
+    mostrarTela(telaLogin);
+
+  } else {
+
+    mostrarTela(telaCadastro);
+
+  }
+
+}
+
+
+/* =====================================================
+   SALVAR CADASTRO DO PASSAGEIRO
+===================================================== */
+
+document
+  .getElementById("btnSalvarCadastro")
+  .addEventListener("click", function () {
+
+    const nome =
+      document.getElementById("nome").value.trim();
+
+    const endereco =
+      document.getElementById("endereco").value.trim();
+
+    const email =
+      document.getElementById("email").value.trim();
+
+    const telefone =
+      document.getElementById("telefone").value.trim();
+
+    const mensagem =
+      document.getElementById("mensagemCadastro");
+
+
+    if (
+      !nome ||
+      !endereco ||
+      !email ||
+      !telefone
+    ) {
+
+      mensagem.textContent =
+        "Preencha todos os campos.";
+
+      return;
+
+    }
+
+
+    const cadastro = {
+
+      nome: nome,
+
+      endereco: endereco,
+
+      email: email,
+
+      telefone: telefone
+
+    };
+
+
+    localStorage.setItem(
+
+      CHAVE_CADASTRO,
+
+      JSON.stringify(cadastro)
+
+    );
+
+
+    document.getElementById("nome").value = "";
+
+    document.getElementById("endereco").value = "";
+
+    document.getElementById("email").value = "";
+
+    document.getElementById("telefone").value = "";
+
+
+    mensagem.textContent =
+      "Cadastro salvo com sucesso.";
+
+
+    setTimeout(function () {
+
+      mostrarTela(telaLogin);
+
+    }, 800);
+
+});
+
+
+/* =====================================================
+   ABRIR CADASTRO DE USUÁRIO
+===================================================== */
+
+document
+  .getElementById("btnCadastroLogin")
+  .addEventListener("click", function () {
+
+    mostrarTela(telaCadastroLogin);
+
+});
+
+
+/* =====================================================
+   VOLTAR PARA LOGIN
+===================================================== */
+
+document
+  .getElementById("btnVoltarLogin")
+  .addEventListener("click", function () {
+
+    mostrarTela(telaLogin);
+
+});
+
+
+/* =====================================================
+   SALVAR USUÁRIO E SENHA
+===================================================== */
+
+document
+  .getElementById("btnSalvarLogin")
+  .addEventListener("click", function () {
+
+    const usuario =
+      document.getElementById("novoUsuario")
+      .value
+      .trim();
+
+    const senha =
+      document.getElementById("novaSenha")
+      .value;
+
+    const mensagem =
+      document.getElementById(
+        "mensagemCadastroLogin"
+      );
+
+
+    if (!usuario || !senha) {
+
+      mensagem.textContent =
+        "Digite o usuário e a senha.";
+
+      return;
+
+    }
+
+
+    const login = {
+
+      usuario: usuario,
+
+      senha: senha
+
+    };
+
+
+    localStorage.setItem(
+
+      CHAVE_LOGIN,
+
+      JSON.stringify(login)
+
+    );
+
+
+    document.getElementById(
+      "novoUsuario"
+    ).value = "";
+
+    document.getElementById(
+      "novaSenha"
+    ).value = "";
+
+
+    mensagem.textContent =
+      "Usuário e senha salvos.";
+
+
+    setTimeout(function () {
+
+      mostrarTela(telaLogin);
+
+    }, 800);
+
+});
+
+
+/* =====================================================
+   LOGIN
+===================================================== */
+
+document
+  .getElementById("btnLogin")
+  .addEventListener("click", function () {
+
+    const usuario =
+      document.getElementById(
+        "loginUsuario"
+      ).value.trim();
+
+    const senha =
+      document.getElementById(
+        "loginSenha"
+      ).value;
+
+    const mensagem =
+      document.getElementById(
+        "mensagemLogin"
+      );
+
+
+    const loginSalvo =
+      localStorage.getItem(
+        CHAVE_LOGIN
+      );
+
+
+    if (!loginSalvo) {
+
+      mensagem.textContent =
+        "Cadastre primeiro um usuário e uma senha.";
+
+      return;
+
+    }
+
+
+    let login;
+
+
+    try {
+
+      login =
+        JSON.parse(loginSalvo);
+
+    } catch (erro) {
+
+      mensagem.textContent =
+        "Dados de login inválidos.";
+
+      return;
+
+    }
+
+
+    if (
+      usuario === login.usuario &&
+      senha === login.senha
+    ) {
+
+      mensagem.textContent = "";
+
+
+      document.getElementById(
+        "loginUsuario"
+      ).value = "";
+
+      document.getElementById(
+        "loginSenha"
+      ).value = "";
+
+
+      mostrarTela(telaCorrida);
+
+
+      iniciarGPS();
+
+
+    } else {
+
+      mensagem.textContent =
+        "Usuário ou senha incorretos.";
+
+    }
+
+});
+
+
+/* =====================================================
+   GPS
+===================================================== */
+
+function iniciarGPS() {
+
+  const campo =
+    document.getElementById(
+      "embarque"
+    );
+
+
+  campo.value =
+    "Obtendo localização...";
+
+
+  if (!navigator.geolocation) {
+
+    campo.value =
+      "GPS não disponível neste aparelho.";
+
+    return;
+
+  }
+
+
+  navigator.geolocation.getCurrentPosition(
+
+    function (posicao) {
+
+      origemLat =
+        posicao.coords.latitude;
+
+      origemLng =
+        posicao.coords.longitude;
+
+
+      buscarEnderecoGPS(
+        origemLat,
+        origemLng
+      );
+
+    },
+
+    function () {
+
+      campo.value =
+        "Não foi possível obter sua localização.";
+
+    },
+
+    {
+
+      enableHighAccuracy: true,
+
+      timeout: 15000,
+
+      maximumAge: 0
+
+    }
+
+  );
+
+}
+
+
+/* =====================================================
+   CONVERTER GPS EM ENDEREÇO
+===================================================== */
+
+async function buscarEnderecoGPS(
+  lat,
+  lng
+) {
+
+  const campo =
+    document.getElementById(
+      "embarque"
+    );
+
+
+  try {
+
+    const url =
+      "https://nominatim.openstreetmap.org/reverse" +
+      "?format=json" +
+      "&lat=" +
+      encodeURIComponent(lat) +
+      "&lon=" +
+      encodeURIComponent(lng) +
+      "&zoom=18" +
+      "&addressdetails=1" +
+      "&accept-language=pt-BR";
+
+
+    const resposta =
+      await fetch(url);
+
+
+    if (!resposta.ok) {
+
+      throw new Error(
+        "Falha no serviço de endereço."
+      );
+
+    }
+
+
+    const dados =
+      await resposta.json();
+
+
+    campo.value =
+      dados.display_name ||
+      (
+        lat.toFixed(6) +
+        ", " +
+        lng.toFixed(6)
+      );
+
+
+  } catch (erro) {
+
+    campo.value =
+      lat.toFixed(6) +
+      ", " +
+      lng.toFixed(6);
+
+  }
+
+}
+
+
+/* =====================================================
+   EDITAR EMBARQUE
+===================================================== */
+
+document
+  .getElementById("btnEditarEmbarque")
+  .addEventListener("click", function () {
+
+    const campo =
+      document.getElementById(
+        "embarque"
+      );
+
+
+    campo.readOnly =
+      !campo.readOnly;
+
+
+    if (!campo.readOnly) {
+
+      campo.focus();
+
+    }
+
+});
+
+
+/* =====================================================
+   EDITAR DESEMBARQUE
+===================================================== */
+
+document
+  .getElementById("btnEditarDesembarque")
+  .addEventListener("click", function () {
+
+    document.getElementById(
+      "desembarque"
+    ).focus();
+
+});
+
+
+/* =====================================================
+   PESQUISA DE ENDEREÇO
+===================================================== */
+
+document
+  .getElementById("desembarque")
+  .addEventListener("input", function () {
+
+    const texto =
+      this.value.trim();
+
+
+    destinoLat = null;
+
+    destinoLng = null;
+
+
+    clearTimeout(timerBusca);
+
+
+    if (texto.length < 3) {
+
+      document.getElementById(
+        "sugestoesEndereco"
+      ).innerHTML = "";
+
+      return;
+
+    }
+
+
+    timerBusca =
+      setTimeout(function () {
+
+        pesquisarEndereco(texto);
+
+      }, 600);
+
+});
+
+
+/* =====================================================
+   PESQUISAR ENDEREÇO
+===================================================== */
+
+async function pesquisarEndereco(
+  texto
+) {
+
+  const caixa =
+    document.getElementById(
+      "sugestoesEndereco"
+    );
+
+
+  caixa.textContent =
+    "Pesquisando endereços...";
+
+
+  try {
+
+    const url =
+      "https://nominatim.openstreetmap.org/search" +
+      "?format=json" +
+      "&q=" +
+      encodeURIComponent(texto) +
+      "&countrycodes=br" +
+      "&limit=10" +
+      "&addressdetails=1" +
+      "&dedupe=0" +
+      "&accept-language=pt-BR";
+
+
+    const resposta =
+      await fetch(url);
+
+
+    if (!resposta.ok) {
+
+      throw new Error(
+        "Falha na pesquisa."
+      );
+
+    }
+
+
+    const resultados =
+      await resposta.json();
+
+
+    caixa.innerHTML = "";
+
+
+    if (!resultados.length) {
+
+      caixa.textContent =
+        "Nenhum endereço encontrado.";
+
+      return;
+
+    }
+
+
+    resultados.forEach(
+      function (item) {
+
+        const endereco =
+          item.address || {};
+
+
+        const rua =
+          endereco.road ||
+          endereco.pedestrian ||
+          endereco.footway ||
+          item.display_name;
+
+
+        const numero =
+          endereco.house_number
+            ? ", nº " +
+              endereco.house_number
+            : "";
+
+
+        const bairro =
+          endereco.suburb ||
+          endereco.neighbourhood ||
+          endereco.quarter ||
+          "";
+
+
+        const cidade =
+          endereco.city ||
+          endereco.town ||
+          endereco.municipality ||
+          "";
+
+
+        const estado =
+          endereco.state ||
+          "";
+
+
+        const div =
+          document.createElement(
+            "div"
+          );
+
+
+        div.className =
+          "sugestao";
+
+
+        const titulo =
+          document.createElement(
+            "strong"
+          );
+
+
+        titulo.textContent =
+          rua + numero;
+
+
+        div.appendChild(titulo);
+
+
+        const detalhes =
+          document.createElement(
+            "span"
+          );
+
+
+        detalhes.textContent =
+
+          bairro +
+
+          (
+            bairro && cidade
+              ? " - "
+              : ""
+          ) +
+
+          cidade +
+
+          (
+            cidade && estado
+              ? " - "
+              : ""
+          ) +
+
+          estado;
+
+
+        div.appendChild(
+          detalhes
+        );
+
+
+        div.addEventListener(
+          "click",
+          function () {
+
+            destinoLat =
+              parseFloat(
+                item.lat
+              );
+
+            destinoLng =
+              parseFloat(
+                item.lon
+              );
+
+
+            document.getElementById(
+              "desembarque"
+            ).value =
+              item.display_name;
+
+
+            caixa.innerHTML = "";
+
+          }
+        );
+
+
+        caixa.appendChild(div);
+
+      }
+    );
+
+
+  } catch (erro) {
+
+    caixa.textContent =
+      "Não foi possível pesquisar o endereço.";
+
+  }
+
+}
+
+
+/* =====================================================
+   CALCULAR ROTA
+===================================================== */
+
+document
+  .getElementById("btnCalcularRota")
+  .addEventListener(
+    "click",
+    calcularRota
+  );
+
+
+async function calcularRota() {
+
+  const resultado =
+    document.getElementById(
+      "resultadoRota"
+    );
+
+
+  if (
+    origemLat === null ||
+    origemLng === null
+  ) {
+
+    resultado.innerHTML =
+      '<div class="info-rota">' +
+      'Não foi possível obter o local de embarque.' +
+      '</div>';
+
+
+    iniciarGPS();
+
+    return;
+
+  }
+
+
+  if (
+    destinoLat === null ||
+    destinoLng === null
+  ) {
+
+    resultado.innerHTML =
+      '<div class="info-rota">' +
+      'Selecione um endereço de desembarque na lista.' +
+      '</div>';
+
+    return;
+
+  }
+
+
+  resultado.innerHTML =
+    '<div class="info-rota">' +
+    'Calculando rota...' +
+    '</div>';
+
+
+  try {
+
+    const url =
+      "https://router.project-osrm.org/route/v1/driving/" +
+
+      origemLng +
+      "," +
+      origemLat +
+
+      ";" +
+
+      destinoLng +
+      "," +
+      destinoLat +
+
+      "?overview=full&geometries=geojson";
+
+
+    const resposta =
+      await fetch(url);
+
+
+    if (!resposta.ok) {
+
+      throw new Error(
+        "Falha no roteamento."
+      );
+
+    }
+
+
+    const dados =
+      await resposta.json();
+
+
+    if (
+      !dados.routes ||
+      !dados.routes.length
+    ) {
+
+      throw new Error(
+        "Nenhuma rota encontrada."
+      );
+
+    }
+
+
+    const rota =
+      dados.routes[0];
+
+
+    const distanciaKm =
+      rota.distance / 1000;
+
+
+    const tempoMin =
+      Math.ceil(
+        rota.duration / 60
+      );
+
+
+    /*
+      PREÇO:
+
+      R$ 2,00 por km
+      +
+      R$ 1,00 por minuto
+      mínimo R$ 7,00
+    */
+
+    const valorCalculado =
+      Math.max(
+        7,
+        distanciaKm * 2 +
+        tempoMin
+      );
+
+
+    resultado.innerHTML =
+
+      '<div class="info-rota">' +
+
+      '<div>' +
+      '<strong>Distância:</strong> ' +
+      distanciaKm.toFixed(2) +
+      ' km' +
+      '</div>' +
+
+      '<div>' +
+      '<strong>Tempo estimado:</strong> ' +
+      tempoMin +
+      ' min' +
+      '</div>' +
+
+      '<div>' +
+      '<strong>Valor da corrida:</strong> R$ ' +
+      valorCalculado
+        .toFixed(2)
+        .replace(".", ",") +
+      '</div>' +
+
+      '</div>';
+
+
+    mostrarRotaNoMapa(
+      rota.geometry
+    );
+
+
+  } catch (erro) {
+
+    resultado.innerHTML =
+      '<div class="info-rota">' +
+      'Não foi possível calcular a rota.' +
+      '</div>';
+
+  }
+
+}
+
+
+/* =====================================================
+   INICIALIZAR MAPA
+===================================================== */
+
+function inicializarMapa() {
+
+  if (mapa) {
+
+    return;
+
+  }
+
+
+  mapa =
+    L.map("mapa");
+
+
+  L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+
+      attribution:
+        "&copy; OpenStreetMap contributors"
+
+    }
+  ).addTo(mapa);
+
+
+  mapa.setView(
+    [-23.5505, -46.6333],
+    13
+  );
+
+}
+
+
+/* =====================================================
+   MOSTRAR ROTA
+===================================================== */
+
+function mostrarRotaNoMapa(
+  geometria
+) {
+
+  inicializarMapa();
+
+
+  if (marcadorOrigem) {
+
+    mapa.removeLayer(
+      marcadorOrigem
+    );
+
+  }
+
+
+  if (marcadorDestino) {
+
+    mapa.removeLayer(
+      marcadorDestino
+    );
+
+  }
+
+
+  if (linhaRota) {
+
+    mapa.removeLayer(
+      linhaRota
+    );
+
+  }
+
+
+  marcadorOrigem =
+    L.marker([
+      origemLat,
+      origemLng
+    ])
+    .addTo(mapa)
+    .bindPopup(
+      "Embarque"
+    );
+
+
+  marcadorDestino =
+    L.marker([
+      destinoLat,
+      destinoLng
+    ])
+    .addTo(mapa)
+    .bindPopup(
+      "Desembarque"
+    );
+
+
+  linhaRota =
+    L.geoJSON(
+      geometria
+    ).addTo(mapa);
+
+
+  const grupo =
+    L.featureGroup([
+
+      marcadorOrigem,
+
+      marcadorDestino,
+
+      linhaRota
+
+    ]);
+
+
+  mapa.fitBounds(
+    grupo.getBounds(),
+    {
+      padding: [
+        30,
+        30
+      ]
+    }
+  );
+
+
+  setTimeout(
+    function () {
+
+      mapa.invalidateSize();
+
+    },
+    300
+  );
+
+}
+
+
+/* =====================================================
+   INÍCIO DO APLICATIVO
+===================================================== */
+
+verificarCadastro();
+
+</script>
+
+</body>
+</html>
